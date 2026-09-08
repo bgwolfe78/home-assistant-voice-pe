@@ -155,6 +155,9 @@ wifi:
           - sendspin.media_source.enable_static_delay_adjustment:
         else:
           - sendspin.media_source.disable_static_delay_adjustment:
+    # Direct-realtime mode must not depend on a Home Assistant API client being
+    # paired. Start wake-word detection once Wi-Fi and the audio path are up.
+    - micro_wake_word.start:
   on_disconnect:
     - script.execute: control_leds
 
@@ -182,13 +185,10 @@ ota:
 api:
   encryption:
     key: ${api_key}
-  # va-direct: start micro_wake_word HERE (mirrors stock home-assistant-voice.yaml
-  # and the fjfricke reference) instead of on_boot. Starting mWW at on_boot+1s
-  # raced the XMOS voice-kit coming up, so mWW could begin reading a mic that
-  # wasn't streaming yet and never recover — the wake word silently never fired.
-  # on_client_connected runs once HA + WiFi + the audio path are fully up.
+  # Keep Home Assistant's API lifecycle for diagnostics and entities. Wake-word
+  # detection is armed by wifi.on_connect so direct realtime also works before
+  # this endpoint is paired with Home Assistant.
   on_client_connected:
-    - micro_wake_word.start:
     # Keep "stop" disabled in the resting/idle state; on_phase arms it only while
     # the assistant is replying. Explicit here so the boot state is deterministic
     # regardless of whether the HA api or the va_client WS connects first.

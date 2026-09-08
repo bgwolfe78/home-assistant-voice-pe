@@ -192,7 +192,6 @@ api:
     # Keep "stop" disabled in the resting/idle state; on_phase arms it only while
     # the assistant is replying. Explicit here so the boot state is deterministic
     # regardless of whether the HA api or the va_client WS connects first.
-    - micro_wake_word.disable_model: stop
     - script.execute: control_leds
   on_client_disconnected:
     - script.execute: control_leds
@@ -382,7 +381,6 @@ switch:
     restore_mode: ALWAYS_OFF
     on_turn_off:
       # Disable stop wake word
-      - micro_wake_word.disable_model: stop
       - script.execute: disable_repeat
       # Stop any current announcement (ie: stop the timer ring mid playback)
       - if:
@@ -407,10 +405,8 @@ switch:
           decibel_reduction: 20
           duration: 0.0s
       # Enable stop wake word
-      - micro_wake_word.enable_model: stop
       # B3: a timer ring is loud audio → use the stricter ~0.50 (128), same as a
       # reply (single shared cutoff on id(stop), so set it explicitly here).
-      - lambda: 'id(stop).set_probability_cutoff(128);'
       # Ring timer
       - script.execute: ring_timer
       # Refresh LED
@@ -1707,7 +1703,6 @@ script:
               return id(voice_assistant_phase) == ${voice_assist_idle_phase_id} ||
                      id(voice_assistant_phase) == ${voice_assist_listening_for_command_phase_id};
           then:
-            - micro_wake_word.disable_model: stop
             - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
             - script.execute: control_leds
 
@@ -1983,12 +1978,10 @@ va_client:
         condition:
           lambda: 'return phase == "replying";'
         then:
-          - micro_wake_word.enable_model: stop
           # B3: TTS is playing → use the stock-default ~0.50 (128) cutoff to
           # reject the common reply-echo false stops (sliding-avg 0.41-0.49)
           # while keeping real reply-stops (0.52-0.67). Dropped to 0.40 in the
           # quiet follow-up/idle window below. (See the stop model comment.)
-          - lambda: 'id(stop).set_probability_cutoff(128);'
           - script.stop: followup_window_watchdog
     # A turn is in flight ("listening" = the server VAD heard the user speak,
     # OR the follow-up window just opened its listening LED): stop the disarm
@@ -2011,10 +2004,8 @@ va_client:
         condition:
           lambda: 'return phase == "idle";'
         then:
-          - micro_wake_word.enable_model: stop
           # B3: quiet at rest (no TTS) → restore the sensitive 0.40 (102) so weak
           # real stops in the follow-up window are caught.
-          - lambda: 'id(stop).set_probability_cutoff(102);'
           - script.execute: followup_window_watchdog
   on_repeated_failure:
     # Backend has been unreachable for N reconnect attempts in a row.
@@ -2066,10 +2057,8 @@ va_client:
     # their mind ("отмени"/"stop"). on_phase only enables stop during
     # replying — during follow-up listening the server is silent until
     # the user speaks, so we have to enable it ourselves.
-    - micro_wake_word.enable_model: stop
     # B3: the follow-up window is quiet (the question's TTS + chime finished
     # before the mic opens) → sensitive 0.40 (102) to catch weak stops.
-    - lambda: 'id(stop).set_probability_cutoff(102);'
     # If the user stays silent, va_client closes the mic at kRequestFollowUpMs
     # but doesn't notify yaml — without this watchdog the LED would stay
     # in listening_for_command forever and `stop` would never disarm.
@@ -2093,11 +2082,8 @@ micro_wake_word:
     # removed on purpose. "stop" stays — it's the reliable barge-in/interrupt
     # word, armed only while the assistant is replying (see on_phase below).
     # kahrendt/microWakeWord redirects to the OHF-Voice org automatically.
-    - model: https://github.com/kahrendt/microWakeWord/releases/download/v2.1_models/alexa.json
+    - model: alexa
       id: alexa
-    - model: https://github.com/kahrendt/microWakeWord/releases/download/stop/stop.json
-      id: stop
-      internal: true
       # The model ships with cutoff 0.5. This baked 0.4 is only the boot/quiet
       # value; the cutoff is set PER-PHASE at runtime (B3, 2026-06-14):
       #   reply playing / timer ring → ~0.50 (128) = the stock-firmware default
@@ -2117,7 +2103,6 @@ micro_wake_word:
       # 0.65 overlap; both i2s channels are equally AEC'd, no cleaner tap). It is
       # far rarer than the 0.44-0.49 cluster that 0.50 now removes.
       # TUNING KNOB: adjust the per-phase 128/102 values (uint8 = round(p*255)).
-      probability_cutoff: 0.4
   # Permissive VAD gate. With the default threshold the VAD model repeatedly
   # vetoed REAL stop detections — device log shows "Wake word model predicts
   # 'Stop', but VAD model doesn't" 3x in a row before finally accepting
@@ -2184,7 +2169,6 @@ micro_wake_word:
                             # (phase is idle, so stop_feedback_flash's closing
                             # control_leds shows idle).
                             - script.execute: stop_feedback_flash
-                            - micro_wake_word.disable_model: stop
                           else:
                             - logger.log:
                                 format: "ignoring 'stop' — no reply audio yet (phase=%d), nothing to stop"

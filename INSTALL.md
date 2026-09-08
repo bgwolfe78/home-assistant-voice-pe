@@ -174,7 +174,7 @@ That's it — the device boots, connects to the add-on, and you're ready to talk
 
 1. After boot, the LED ring should settle to **idle (blue)** — that means the device
    reached the add-on's WebSocket.
-2. Say **"alexa"** → a wake chime plays and the ring turns to **listening**.
+2. Say **"Okay Nabu"** → a wake chime plays and the ring turns to **listening**.
 3. Ask for something you exposed, e.g. *"turn on the bedroom lamp"* → the ring shows
    **thinking** → it acts and replies.
 4. To interrupt a reply: say **"stop"** or press the **center button**.
